@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guardiões da Compostagem</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    background: #172117;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#game-container {
+    position: relative;
+    width: min(1000px, 100vw);
+    height: min(700px, 100vh);
+    overflow: hidden;
+    background-image: url("fundo.png");
+    background-size: cover;
+    background-position: center;
+    border: 4px solid white;
+    border-radius: 12px;
+    user-select: none;
+    touch-action: none;
+}
+
+/* HUD */
+#hud {
+    position: absolute;
+    z-index: 50;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    width: fit-content;
+    max-width: calc(100% - 24px);
+    padding: 10px 16px;
+    border-radius: 10px;
+    background: rgba(0,0,0,.78);
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+#score {
+    color: #7cff7c;
+}
+
+#holding {
+    color: #ffca28;
+}
+
+#timer {
+    color: #4fc3f7;
+}
+
+/* Personagem */
+#player {
+    position: absolute;
+    z-index: 20;
+    width: 120px;
+    height: 120px;
+    background-image: url("personagem_frente_.png");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    will-change: left, top;
+}
+
+/* Resíduos */
+.item {
+    position: absolute;
+    z-index: 10;
+    width: 58px;
+    height: 58px;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    filter: drop-shadow(0 3px 3px rgba(0,0,0,.45));
+}
+
+/* Lixeiras */
+.bin {
+    position: absolute;
+    z-index: 5;
+    bottom: 12px;
+    width: 100px;
+    height: 125px;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* Mensagem */
+#message {
+    position: absolute;
+    z-index: 60;
+    left: 50%;
+    top: 90px;
+    transform: translateX(-50%);
+    min-width: 250px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 18px;
+    background: rgba(0,0,0,.82);
+    color: white;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s;
+}
+
+#message.show {
+    opacity: 1;
+}
+
+/* Tela final */
+#game-over {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: rgba(0,0,0,.88);
+    color: white;
+    padding: 25px;
+}
+
+#game-over h1 {
+    margin: 0 0 12px;
+    font-size: clamp(32px, 6vw, 54px);
+}
+
+#game-over p {
+    font-size: 22px;
+    margin: 8px 0 22px;
+}
+
+#restart-btn {
+    border: 0;
+    border-radius: 10px;
+    padding: 13px 25px;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    background: #4caf50;
+    color: white;
+}
+
+#restart-btn:hover {
+    background: #43a047;
+}
+
+/* Controles */
+#controls {
+    position: absolute;
+    z-index: 55;
+    left: 50%;
+    bottom: 145px;
+    transform: translateX(-50%);
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: rgba(0,0,0,.55);
+    color: white;
+    font-size: 14px;
+    text-align: center;
+}
+
+/* Em telas menores */
+@media (max-width: 700px) {
+    #game-container {
+        border-width: 2px;
+        border-radius: 0;
+    }
+
+    #hud {
+        font-size: 14px;
+        gap: 8px;
+        padding: 8px 10px;
+    }
+
+    #player {
+        width: 90px;
+        height: 90px;
+    }
+
+    .item {
+        width: 45px;
+        height: 45px;
+    }
+
+    .bin {
+        width: 75px;
+        height: 100px;
+    }
+
+    #controls {
+        bottom: 115px;
+        font-size: 12px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div id="game-container">
+
+    <div id="hud">
+        <span>🌱 Pontuação: <span id="score">0</span></span>
+        <span>📦 Segurando: <span id="holding">Nenhum</span></span>
+        <span>⏱️ Tempo: <span id="timer">60</span>s</span>
+    </div>
+
+    <div id="message"></div>
+
+    <!-- Lixeiras -->
+    <div class="bin" id="bin-verde" title="Vidro"></div>
+    <div class="bin" id="bin-azul" title="Papel/Papelão"></div>
+    <div class="bin" id="bin-vermelha" title="Plástico"></div>
+    <div class="bin" id="bin-marrom" title="Orgânico"></div>
+
+    <div id="player"></div>
+
+    <div id="controls">
+        Use as <b>SETAS</b> ou <b>W A S D</b> para movimentar o guardião
+    </div>
+
+    <div id="game-over">
+        <h1>🌱 Tempo Esgotado!</h1>
+        <p>Sua pontuação final foi: <strong id="final-score">0</strong> pontos</p>
+        <button id="restart-btn">Jogar Novamente</button>
+    </div>
+
+</div>
+
+<script>
+"use strict";
+
+/* =========================
+   ELEMENTOS
+========================= */
+const container = document.getElementById("game-container");
+const player = document.getElementById("player");
+const scoreEl = document.getElementById("score");
+const holdingEl = document.getElementById("holding");
+const timerEl = document.getElementById("timer");
+const messageEl = document.getElementById("message");
+const gameOverEl = document.getElementById("game-over");
+const finalScoreEl = document.getElementById("final-score");
+const restartBtn = document.getElementById("restart-btn");
+
+/* =========================
+   IMAGENS
+========================= */
+const assets = {
+    bins: {
+        vidro: "lixo_verde_.png",
+        papel: "lixo_azul_.png",
+        plastico: "lixeira_vermelha_.png",
+        organico: "lixeira_marrom_.png"
+    },
+
+    player: {
+        frente: "personagem_frente_.png",
+        costas: "personagem_costas_.png",
+        esquerda: "personagem_lado_esquerdo_.png",
+        direita: "personagem_lado_direito_.png"
+    }
+};
+
+/* =========================
+   CONFIGURAÇÕES
+========================= */
+const GAME_TIME = 60;
+const PLAYER_SPEED = 6;
+const MAX_ITEMS = 5;
+const SPAWN_TIME = 2200;
+
+/* =========================
+   ESTADO DO JOGO
+========================= */
+let score = 0;
+let timeLeft = GAME_TIME;
+let currentItem = null;
+let activeItems = [];
+let isGameOver = false;
+
+let playerPos = {
+    x: 440,
+    y: 240
+};
+
+const keys = {};
+let lastFrameTime = performance.now();
+let timerInterval = null;
+let spawnInterval = null;
+
+/* =========================
+   RESÍDUOS
+========================= */
+const itemsData = [
+    {
+        type: "vidro",
+        img: "vidro_1_.png",
+        name: "Garrafa de Vidro"
+    },
+    {
+        type: "vidro",
+        img: "vidro_3_.png",
+        name: "Frasco de Vidro"
+    },
+    {
+        type: "vidro",
+        img: "vidro_4_.png",
+        name: "Pote de Vidro"
+    },
+
+    {
+        type: "papel",
+        img: "caixa_1_.png",
+        name: "Caixa de Papelão"
+    },
+    {
+        type: "papel",
+        img: "papelao_2_.png",
+        name: "Papelão"
+    },
+
+    {
+        type: "plastico",
+        img: "refri_.png",
+        name: "Garrafa Plástica"
+    },
+
+    {
+        type: "organico",
+        img: "abacate_.png",
+        name: "Abacate"
+    },
+    {
+        type: "organico",
+        img: "banana_.png",
+        name: "Banana"
+    },
+    {
+        type: "organico",
+        img: "cha_.png",
+        name: "Saco de Chá"
+    },
+    {
+        type: "organico",
+        img: "peixe_.png",
+        name: "Espinha de Peixe"
+    },
+    {
+        type: "organico",
+        img: "melanci_.png",
+        name: "Melancia"
+    },
+    {
+        type: "organico",
+        img: "casca_de_ovo_.png",
+        name: "Casca de Ovo"
+    },
+    {
+        type: "organico",
+        img: "resto_de_maca_.png",
+        name: "Resto de Maçã"
+    }
+];
+
+/* =========================
+   LIXEIRAS
+========================= */
+const bins = {
+    vidro: document.getElementById("bin-verde"),
+    papel: document.getElementById("bin-azul"),
+    plastico: document.getElementById("bin-vermelha"),
+    organico: document.getElementById("bin-marrom")
+};
+
+/* =========================
+   TECLADO
+========================= */
+window.addEventListener("keydown", function(e) {
+    const allowed = [
+        "ArrowUp",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowRight",
+        "w", "W",
+        "a", "A",
+        "s", "S",
+        "d", "D"
+    ];
+
+    if (allowed.includes(e.key)) {
+        e.preventDefault();
+        keys[e.key] = true;
+    }
+});
+
+window.addEventListener("keyup", function(e) {
+    keys[e.key] = false;
+});
+
+/* Evita tecla presa quando a janela perde o foco */
+window.addEventListener("blur", function() {
+    for (const key in keys) {
+        keys[key] = false;
+    }
+});
+
+/* =========================
+   POSICIONAMENTO DAS LIXEIRAS
+========================= */
+function positionBins() {
+    const w = container.clientWidth;
+
+    bins.vidro.style.left = Math.max(10, w * 0.08) + "px";
+    bins.papel.style.left = Math.max(10, w * 0.31) + "px";
+    bins.plastico.style.left = Math.max(10, w * 0.55) + "px";
+    bins.organico.style.left = Math.max(10, w * 0.78) + "px";
+}
+
+window.addEventListener("resize", positionBins);
+
+/* =========================
+   POSIÇÃO DO JOGADOR
+========================= */
+function keepPlayerInside() {
+    const maxX = Math.max(0, container.clientWidth - player.offsetWidth);
+    const maxY = Math.max(0, container.clientHeight - player.offsetHeight);
+
+    playerPos.x = Math.max(0, Math.min(playerPos.x, maxX));
+    playerPos.y = Math.max(55, Math.min(playerPos.y, maxY - 5));
+}
+
+function updatePlayerImage(direction) {
+    if (direction === "up") {
+        player.style.backgroundImage = `url("${assets.player.costas}")`;
+    } else if (direction === "down") {
+        player.style.backgroundImage = `url("${assets.player.frente}")`;
+    } else if (direction === "left") {
+        player.style.backgroundImage = `url("${assets.player.esquerda}")`;
+    } else if (direction === "right") {
+        player.style.backgroundImage = `url("${assets.player.direita}")`;
+    }
+}
+
+/* =========================
+   MOVIMENTO
+========================= */
+function updateMovement(delta) {
+    let dx = 0;
+    let dy = 0;
+    let direction = null;
+
+    if (keys["ArrowUp"] || keys["w"] || keys["W"]) {
+        dy -= 1;
+        direction = "up";
+    }
+
+    if (keys["ArrowDown"] || keys["s"] || keys["S"]) {
+        dy += 1;
+        direction = "down";
+    }
+
+    if (keys["ArrowLeft"] || keys["a"] || keys["A"]) {
+        dx -= 1;
+        direction = "left";
+    }
+
+    if (keys["ArrowRight"] || keys["d"] || keys["D"]) {
+        dx += 1;
+        direction = "right";
+    }
+
+    /* Movimento diagonal não fica mais rápido */
+    if (dx !== 0 || dy !== 0) {
+        const length = Math.hypot(dx, dy);
+
+        dx /= length;
+        dy /= length;
+
+        playerPos.x += dx * PLAYER_SPEED * delta;
+        playerPos.y += dy * PLAYER_SPEED * delta;
+
+        updatePlayerImage(direction);
+    }
+
+    keepPlayerInside();
+
+    player.style.left = playerPos.x + "px";
+    player.style.top = playerPos.y + "px";
+}
+
+/* =========================
+   COLISÃO
+========================= */
+function rectanglesOverlap(a, b) {
+    return (
+        a.left < b.right &&
+        a.right > b.left &&
+        a.top < b.bottom &&
+        a.bottom > b.top
+    );
+}
+
+function getRect(x, y, width, height) {
+    return {
+        left: x,
+        top: y,
+        right: x + width,
+        bottom: y + height
+    };
+}
+
+/* =========================
+   MENSAGENS
+========================= */
+let messageTimeout;
+
+function showMessage(text, good = true) {
+    clearTimeout(messageTimeout);
+
+    messageEl.textContent = text;
+    messageEl.style.border = good
+        ? "2px solid #66bb6a"
+        : "2px solid #ef5350";
+
+    messageEl.classList.add("show");
+
+    messageTimeout = setTimeout(() => {
+        messageEl.classList.remove("show");
+    }, 1000);
+}
+
+/* =========================
+   CRIAR RESÍDUO
+========================= */
+function spawnItem() {
+    if (isGameOver || activeItems.length >= MAX_ITEMS) return;
+
+    const data = itemsData[
+        Math.floor(Math.random() * itemsData.length)
+    ];
+
+    const itemEl = document.createElement("div");
+    itemEl.className = "item";
+    itemEl.style.backgroundImage = `url("${data.img}")`;
+
+    const margin = 25;
+
+    const maxX = Math.max(
+        margin,
+        container.clientWidth - 70 - margin
+    );
+
+    const minY = 105;
+    const maxY = Math.max(
+        minY,
+        container.clientHeight - 210
+    );
+
+    const x = Math.floor(
+        Math.random() * (maxX - margin) + margin
+    );
+
+    const y = Math.floor(
+        Math.random() * (maxY - minY) + minY
+    );
+
+    itemEl.style.left = x + "px";
+    itemEl.style.top = y + "px";
+
+    container.appendChild(itemEl);
+
+    activeItems.push({
+        element: itemEl,
+        type: data.type,
+        name: data.name,
+        x: x,
+        y: y
+    });
+}
+
+/* =========================
+   COLETA
+========================= */
+function checkItemCollection() {
+    if (currentItem) return;
+
+    const playerRect = getRect(
+        playerPos.x + 20,
+        playerPos.y + 20,
+        player.offsetWidth - 40,
+        player.offsetHeight - 40
+    );
+
+    for (let i = activeItems.length - 1; i >= 0; i--) {
+        const item = activeItems[i];
+
+        const itemRect = getRect(
+            item.x + 7,
+            item.y + 7,
+            44,
+            44
+        );
+
+        if (rectanglesOverlap(playerRect, itemRect)) {
+            currentItem = item;
+
+            item.element.remove();
+            activeItems.splice(i, 1);
+
+            holdingEl.textContent = item.name;
+            showMessage("📦 Resíduo coletado!", true);
+
+            break;
+        }
+    }
+}
+
+/* =========================
+   DEPOSITO
+========================= */
+function checkBinDeposit() {
+    if (!currentItem) return;
+
+    const playerRect = getRect(
+        playerPos.x + 25,
+        playerPos.y + 25,
+        player.offsetWidth - 50,
+        player.offsetHeight - 40
+    );
+
+    for (const type in bins) {
+        const bin = bins[type];
+
+        const binLeft = bin.offsetLeft + 15;
+        const binTop = bin.offsetTop + 10;
+
+        const binRect = getRect(
+            binLeft,
+            binTop,
+            bin.offsetWidth - 30,
+            bin.offsetHeight - 10
+        );
+
+        if (rectanglesOverlap(playerRect, binRect)) {
+            depositItem(type);
+            return;
+        }
+    }
+}
+
+function depositItem(targetType) {
+    if (!currentItem) return;
+
+    if (currentItem.type === targetType) {
+        score += 10;
+
+        showMessage(
+            "✅ Descarte correto! +10 pontos",
+            true
+        );
+    } else {
+        score = Math.max(0, score - 5);
+
+        showMessage(
+            "❌ Lixeira errada! -5 pontos",
+            false
+        );
+    }
+
+    scoreEl.textContent = score;
+    currentItem = null;
+    holdingEl.textContent = "Nenhum";
+}
+
+/* =========================
+   CRONÔMETRO
+========================= */
+function startTimer() {
+    clearInterval(timerInterval);
+
+    timerInterval = setInterval(() => {
+        if (isGameOver) return;
+
+        timeLeft--;
+        timerEl.textContent = timeLeft;
+
+        if (timeLeft <= 10) {
+            timerEl.style.color = "#ff5252";
+        }
+
+        if (timeLeft <= 0) {
+            endGame();
+        }
+    }, 1000);
+}
+
+/* =========================
+   FINAL DO JOGO
+========================= */
+function endGame() {
+    if (isGameOver) return;
+
+    isGameOver = true;
+
+    clearInterval(timerInterval);
+    clearInterval(spawnInterval);
+
+    for (const key in keys) {
+        keys[key] = false;
+    }
+
+    finalScoreEl.textContent = score;
+    gameOverEl.style.display = "flex";
+}
+
+/* =========================
+   REINICIAR
+========================= */
+function restartGame() {
+    clearInterval(timerInterval);
+    clearInterval(spawnInterval);
+
+    activeItems.forEach(item => {
+        item.element.remove();
+    });
+
+    activeItems = [];
+    currentItem = null;
+
+    score = 0;
+    timeLeft = GAME_TIME;
+    isGameOver = false;
+
+    playerPos = {
+        x: Math.max(20, (container.clientWidth - 120) / 2),
+        y: Math.max(100, (container.clientHeight - 120) / 2)
+    };
+
+    scoreEl.textContent = "0";
+    holdingEl.textContent = "Nenhum";
+    timerEl.textContent = GAME_TIME;
+    timerEl.style.color = "#4fc3f7";
+
+    player.style.backgroundImage =
+        `url("${assets.player.frente}")`;
+
+    gameOverEl.style.display = "none";
+
+    positionBins();
+    keepPlayerInside();
+
+    player.style.left = playerPos.x + "px";
+    player.style.top = playerPos.y + "px";
+
+    startTimer();
+
+    spawnItem();
+    spawnItem();
+
+    spawnInterval = setInterval(spawnItem, SPAWN_TIME);
+}
+
+/* =========================
+   LOOP PRINCIPAL
+========================= */
+function gameLoop(now) {
+    if (!isGameOver) {
+        /*
+         * Delta time evita que o personagem fique
+         * mais rápido ou mais lento dependendo do computador.
+         */
+        let delta = (now - lastFrameTime) / 16.67;
+
+        /* Limita valores muito grandes após trocar de aba */
+        delta = Math.min(delta, 2);
+
+        updateMovement(delta);
+        checkItemCollection();
+        checkBinDeposit();
+    }
+
+    lastFrameTime = now;
+    requestAnimationFrame(gameLoop);
+}
+
+/* =========================
+   INICIALIZAÇÃO
+========================= */
+restartBtn.addEventListener("click", restartGame);
+
+positionBins();
+restartGame();
+requestAnimationFrame(gameLoop);
+
+</script>
+
+</body>
+</html>
