@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corrida dos Resíduos - Edição Gigante</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #1a1a1a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: white;
+    }
+    #game-container {
+      position: relative;
+      width: 1000px;
+      height: 700px;
+      background-color: #2e4d25;
+      background-image: url('./fundo.png');
+      background-size: cover;
+      background-position: center;
+      overflow: hidden;
+      border: 5px solid #fff;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    #player {
+      position: absolute;
+      width: 160px;
+      height: 160px;
+      background-image: url('./personagem_frente_.png');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      z-index: 10;
+      will-change: left, top, transform;
+    }
+    .item {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      filter: drop-shadow(0px 4px 4px rgba(0,0,0,0.4));
+      z-index: 5;
+    }
+    .bin {
+      position: absolute;
+      bottom: 20px;
+      width: 100px;
+      height: 130px;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      z-index: 2;
+    }
+    #hud {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: rgba(0, 0, 0, 0.75);
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 20px;
+      font-weight: bold;
+      border: 2px solid rgba(255,255,255,0.2);
+      z-index: 20;
+    }
+    #game-over {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.88);
+      z-index: 30;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+    }
+    #game-over h1 {
+      font-size: 44px;
+      margin-bottom: 10px;
+      color: #ff5252;
+    }
+    #game-over p {
+      font-size: 22px;
+      margin: 6px 0;
+    }
+    #rank-tag {
+      font-size: 26px;
+      font-weight: bold;
+      color: #ffca28;
+      margin: 15px 0;
+      padding: 8px 16px;
+      border: 2px dashed #ffca28;
+      border-radius: 8px;
+    }
+    #restart-btn {
+      margin-top: 15px;
+      padding: 12px 28px;
+      font-size: 20px;
+      font-weight: bold;
+      color: #fff;
+      background-color: #4caf50;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #restart-btn:hover {
+      background-color: #45a049;
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-container">
+  <div id="hud">
+    Pontuação: <span id="score">0</span> | Segurando: <span id="holding" style="color: #ffca28;">Nenhum</span> | Tempo: <span id="timer" style="color: #4fc3f7;">60</span>s
+  </div>
+  
+  <div class="bin" id="bin-verde" style="left: 150px; background-image: url('./lixo_verde_.png');" title="Vidro"></div>
+  <div class="bin" id="bin-azul" style="left: 450px; background-image: url('./lixo_azul_.png');" title="Papel/Papelão"></div>
+  <div class="bin" id="bin-marrom" style="left: 750px; background-image: url('./lixeira_marrom_.png');" title="Orgânico"></div>
+
+  <div id="player"></div>
+
+  <div id="game-over">
+    <h1>Tempo Esgotado!</h1>
+    <p>Pontuação final: <span id="final-score" style="color: #4fc3f7; font-weight: bold;">0</span> pontos</p>
+    <p>Melhor Pontuação: <span id="high-score" style="color: #69f0ae; font-weight: bold;">0</span> pontos</p>
+    <div id="rank-tag">🏆 Classificação</div>
+    <button id="restart-btn">Jogar Novamente</button>
+  </div>
+</div>
+
+<script>
+  const player = document.getElementById('player');
+  const scoreEl = document.getElementById('score');
+  const holdingEl = document.getElementById('holding');
+  const timerEl = document.getElementById('timer');
+  const container = document.getElementById('game-container');
+  const gameOverEl = document.getElementById('game-over');
+  const finalScoreEl = document.getElementById('final-score');
+  const highScoreEl = document.getElementById('high-score');
+  const rankTagEl = document.getElementById('rank-tag');
+  const restartBtn = document.getElementById('restart-btn');
+
+  let playerPos = { x: 420, y: 250 };
+  const speed = 7;
+  const keys = {};
+  let currentDirection = 'frente';
+
+  let currentItem = null;
+  let score = 0;
+  let activeItems = [];
+  let timeLeft = 60;
+  let gameInterval = null;
+  let timerInterval = null;
+  let animationFrameId = null;
+  let isGameOver = false;
+
+  const itemsData = [
+    { type: 'vidro', img: './vidro_1_.png', name: 'Garrafa de Vidro' },
+    { type: 'vidro', img: './vidro_3_.png', name: 'Frasco de Vidro' },
+    { type: 'vidro', img: './vidro_4_.png', name: 'Potes de Vidro' },
+    { type: 'papel', img: './caixa_1_.png', name: 'Caixa de Papelão' },
+    { type: 'papel', img: './papelao_2_.png', name: 'Papelão' },
+    { type: 'organico', img: './abacate_.png', name: 'Abacate' },
+    { type: 'organico', img: './banana_.png', name: 'Banana' },
+    { type: 'organico', img: './cha_.png', name: 'Saco de Chá' },
+    { type: 'organico', img: './peixe_.png', name: 'Espinha de Peixe' },
+    { type: 'organico', img: './melanci_.png', name: 'Melancia' },
+    { type: 'organico', img: './casca_de_ovo_.png', name: 'Casca de Ovo' },
+    { type: 'organico', img: './resto_de_maça_.png', name: 'Maçã' }
+  ];
+
+  window.addEventListener('keydown', e => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+      e.preventDefault();
+    }
+    keys[e.key.toLowerCase()] = true;
+  });
+
+  window.addEventListener('keyup', e => {
+    keys[e.key.toLowerCase()] = false;
+  });
+
+  restartBtn.addEventListener('click', restartGame);
+
+  function startTimer() {
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      timeLeft--;
+      timerEl.innerText = timeLeft;
+
+      if (timeLeft <= 0) {
+        endGame();
+      }
+    }, 1000);
+  }
+
+  function getRankTitle(finalPoints) {
+    if (finalPoints >= 100) return '🏆 Mestre da Compostagem!';
+    if (finalPoints >= 60) return '🌱 Guardião Experiente!';
+    if (finalPoints >= 30) return '🧹 Reciclador Atento!';
+    if (finalPoints > 0) return '🌿 Aprendiz Ecológico!';
+    return '⚠️ Precisa Praticar Mais!';
+  }
+
+  function endGame() {
+    isGameOver = true;
+    clearInterval(timerInterval);
+    clearInterval(gameInterval);
+    if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+    finalScoreEl.innerText = score;
+    let savedHighScore = parseInt(localStorage.getItem('guardioes_highscore') || '0', 10);
+    if (score > savedHighScore) {
+      savedHighScore = score;
+      localStorage.setItem('guardioes_highscore', savedHighScore.toString());
+    }
+    highScoreEl.innerText = savedHighScore;
+    rankTagEl.innerText = getRankTitle(score);
+
+    gameOverEl.style.display = 'flex';
+  }
+
+  function restartGame() {
+    score = 0;
+    timeLeft = 60;
+    isGameOver = false;
+    currentItem = null;
+    playerPos = { x: 420, y: 250 };
+    currentDirection = 'frente';
+
+    scoreEl.innerText = score;
+    timerEl.innerText = timeLeft;
+    holdingEl.innerText = 'Nenhum';
+    gameOverEl.style.display = 'none';
+    player.style.backgroundImage = "url('./personagem_frente_.png')";
+    player.style.transform = 'scaleX(1)';
+    updatePlayerPosition();
+
+    activeItems.forEach(item => item.element.remove());
+    activeItems = [];
+
+    startTimer();
+    spawnItem();
+    clearInterval(gameInterval);
+    gameInterval = setInterval(spawnItem, 2500);
+
+    if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    animationFrameId = requestAnimationFrame(update);
+  }
+
+  function spawnItem() {
+    if (isGameOver || activeItems.length >= 4) return;
+
+    const randomData = itemsData[Math.floor(Math.random() * itemsData.length)];
+    const itemEl = document.createElement('div');
+    itemEl.classList.add('item');
+    itemEl.style.backgroundImage = `url('${randomData.img}')`;
+    
+    const x = Math.floor(Math.random() * 840) + 40;
+    const y = Math.floor(Math.random() * 260) + 100;
+    
+    itemEl.style.left = x + 'px';
+    itemEl.style.top = y + 'px';
+
+    container.appendChild(itemEl);
+
+    activeItems.push({
+      element: itemEl,
+      type: randomData.type,
+      name: randomData.name,
+      x: x,
+      y: y
+    });
+  }
+
+  function setPlayerSprite(dir, imgUrl, flip = false) {
+    if (currentDirection !== dir) {
+      currentDirection = dir;
+      player.style.backgroundImage = `url('${imgUrl}')`;
+      player.style.transform = flip ? 'scaleX(-1)' : 'scaleX(1)';
+    }
+  }
+
+  function updatePlayerPosition() {
+    player.style.left = playerPos.x + 'px';
+    player.style.top = playerPos.y + 'px';
+  }
+
+  function update() {
+    if (isGameOver) return;
+
+    let moveX = 0;
+    let moveY = 0;
+
+    if (keys['arrowup'] || keys['w']) moveY -= 1;
+    if (keys['arrowdown'] || keys['s']) moveY += 1;
+    if (keys['arrowleft'] || keys['a']) moveX -= 1;
+    if (keys['arrowright'] || keys['d']) moveX += 1;
+
+    // Gerenciamento seguro das direções
+    if (moveY < 0) {
+      setPlayerSprite('costas', './personagem_costas_.png', false);
+    } else if (moveY > 0) {
+      setPlayerSprite('frente', './personagem_frente_.png', false);
+    } else if (moveX < 0) {
+      // Se a imagem personagem_lado_esquerdo_.png não existir na sua pasta, 
+      // substitua por: setPlayerSprite('esquerdo', './personagem_lado_direito_.png', true);
+      setPlayerSprite('esquerdo', './personagem_lado_esquerdo_.png', false);
+    } else if (moveX > 0) {
+      setPlayerSprite('direito', './personagem_lado_direito_.png', false);
+    }
+
+    if (moveX !== 0 || moveY !== 0) {
+      playerPos.x = Math.max(-20, Math.min(860, playerPos.x + moveX * speed));
+      playerPos.y = Math.max(40, Math.min(480, playerPos.y + moveY * speed));
+      updatePlayerPosition();
+    }
+
+    const playerCenterX = playerPos.x + 80;
+    const playerCenterY = playerPos.y + 80;
+
+    if (!currentItem) {
+      activeItems.forEach((item, index) => {
+        const itemCenterX = item.x + 30;
+        const itemCenterY = item.y + 30;
+
+        if (Math.abs(playerCenterX - itemCenterX) < 70 && Math.abs(playerCenterY - itemCenterY) < 70) {
+          currentItem = item;
+          item.element.remove();
+          activeItems.splice(index, 1);
+          holdingEl.innerText = item.name;
+        }
+      });
+    }
+
+    if (currentItem && playerPos.y > 380) {
+      if (Math.abs(playerCenterX - 200) < 70) {
+        checkDeposit('vidro');
+      } else if (Math.abs(playerCenterX - 500) < 70) {
+        checkDeposit('papel');
+      } else if (Math.abs(playerCenterX - 800) < 70) {
+        checkDeposit('organico');
+      }
+    }
+
+    animationFrameId = requestAnimationFrame(update);
+  }
+
+  function checkDeposit(targetType) {
+    if (currentItem.type === targetType) {
+      score += 10;
+    } else {
+      score = Math.max(0, score - 5);
+    }
+    scoreEl.innerText = score;
+    currentItem = null;
+    holdingEl.innerText = 'Nenhum';
+  }
+
+  updatePlayerPosition();
+  startTimer();
+  spawnItem();
+  gameInterval = setInterval(spawnItem, 2500);
+  animationFrameId = requestAnimationFrame(update);
+</script>
+
+</body>
+</html>
